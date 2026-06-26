@@ -6,7 +6,6 @@ Main application entry point
 from flask import Flask, request, jsonify, session, render_template, redirect, url_for
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
-import sqlite3
 import os
 import json
 import requests
@@ -14,6 +13,15 @@ from datetime import datetime
 from functools import wraps
 import math
 import heapq
+import re
+import sqlite3
+
+try:
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+except ImportError:  # pragma: no cover - optional dependency for production deployments
+    psycopg2 = None
+    RealDictCursor = None
 
 # ─── App Setup ────────────────────────────────────────────────────────────────
 app = Flask(__name__)
@@ -21,80 +29,171 @@ app.secret_key = os.environ.get("SECRET_KEY", "ev-planner-secret-key-change-in-p
 CORS(app, supports_credentials=True)
 
 # ─── Config ───────────────────────────────────────────────────────────────────
+DATABASE_URL = os.environ.get("DATABASE_URL")
 DATABASE = os.path.join(os.path.dirname(__file__), "instance", "ev_planner.db")
 OPEN_CHARGE_MAP_API_KEY = os.environ.get("OCM_API_KEY", "")  # Get from https://openchargemap.org/site/develop/api
 GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "")
+DATABASE_ERRORS = (sqlite3.IntegrityError,)
+
+if psycopg2 is not None:
+    DATABASE_ERRORS = DATABASE_ERRORS + (psycopg2.IntegrityError,)
+
+
+class DatabaseConnection:
+    """Small adapter that supports both SQLite and PostgreSQL connections."""
+
+    def __init__(self, raw_connection, engine):
+        self._connection = raw_connection
+        self._engine = engine
+
+    def execute(self, query, params=()):
+        if self._engine == "postgres":
+            if RealDictCursor is None:
+                raise RuntimeError("psycopg2 is required for PostgreSQL support")
+            cursor = self._connection.cursor(cursor_factory=RealDictCursor)
+            cursor.execute(re.sub(r"\?", "%s", query), params)
+            return cursor
+        return self._connection.execute(query, params)
+
+    def cursor(self):
+        if self._engine == "postgres":
+            if RealDictCursor is None:
+                raise RuntimeError("psycopg2 is required for PostgreSQL support")
+            return self._connection.cursor(cursor_factory=RealDictCursor)
+        return self._connection.cursor()
+
+    def commit(self):
+        self._connection.commit()
+
+    def close(self):
+        self._connection.close()
 
 
 # ─── Database Helpers ─────────────────────────────────────────────────────────
 def get_db():
-    """Open a database connection."""
+    """Open a database connection using SQLite by default or PostgreSQL when configured."""
+    if DATABASE_URL:
+        if psycopg2 is None:
+            raise RuntimeError("psycopg2 is required when DATABASE_URL is provided")
+        conn = psycopg2.connect(DATABASE_URL)
+        return DatabaseConnection(conn, "postgres")
+
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row  # Return rows as dicts
-    return conn
+    return DatabaseConnection(conn, "sqlite")
 
 
 def init_db():
     """Initialize the database schema."""
-    os.makedirs(os.path.dirname(DATABASE), exist_ok=True)
     conn = get_db()
     cursor = conn.cursor()
 
-    # Users table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            email TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
+    if DATABASE_URL:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id BIGSERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
 
-    # Cars table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS cars (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            name TEXT NOT NULL,
-            brand TEXT,
-            model TEXT,
-            battery_range_km REAL NOT NULL,
-            battery_capacity_kwh REAL,
-            is_primary BOOLEAN DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id)
-        )
-    """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS cars (
+                id BIGSERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL,
+                name TEXT NOT NULL,
+                brand TEXT,
+                model TEXT,
+                battery_range_km REAL NOT NULL,
+                battery_capacity_kwh REAL,
+                is_primary BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """)
 
-    # Routes history table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS route_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            from_location TEXT NOT NULL,
-            to_location TEXT NOT NULL,
-            distance_km REAL,
-            duration_min REAL,
-            charging_stops INTEGER DEFAULT 0,
-            route_data TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id)
-        )
-    """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS route_history (
+                id BIGSERIAL PRIMARY KEY,
+                user_id BIGINT,
+                from_location TEXT NOT NULL,
+                to_location TEXT NOT NULL,
+                distance_km REAL,
+                duration_min REAL,
+                charging_stops INTEGER DEFAULT 0,
+                route_data TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """)
 
-    # Favorite routes table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS favorite_routes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            name TEXT NOT NULL,
-            from_location TEXT NOT NULL,
-            to_location TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id)
-        )
-    """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS favorite_routes (
+                id BIGSERIAL PRIMARY KEY,
+                user_id BIGINT NOT NULL,
+                name TEXT NOT NULL,
+                from_location TEXT NOT NULL,
+                to_location TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """)
+    else:
+        os.makedirs(os.path.dirname(DATABASE), exist_ok=True)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS cars (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                brand TEXT,
+                model TEXT,
+                battery_range_km REAL NOT NULL,
+                battery_capacity_kwh REAL,
+                is_primary BOOLEAN DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS route_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                from_location TEXT NOT NULL,
+                to_location TEXT NOT NULL,
+                distance_km REAL,
+                duration_min REAL,
+                charging_stops INTEGER DEFAULT 0,
+                route_data TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS favorite_routes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                from_location TEXT NOT NULL,
+                to_location TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """)
 
     conn.commit()
     conn.close()
@@ -148,7 +247,7 @@ def register():
         session["user_name"] = user["name"]
         session["user_email"] = user["email"]
         return jsonify({"message": "Registered successfully!", "user": {"name": name, "email": email}}), 201
-    except sqlite3.IntegrityError:
+    except DATABASE_ERRORS:
         return jsonify({"error": "Email already registered"}), 409
     finally:
         conn.close()
@@ -1103,6 +1202,19 @@ def api_comprehensive_analysis():
 
 
 if __name__ == "__main__":
-    init_db()
+    # When run directly we still initialize the DB and start the dev server.
+    # In production (gunicorn) the import-time initialization below ensures
+    # the schema exists before the app handles requests.
     print("🚗⚡ EV Charging Route Planner starting...")
-    app.run(debug=True, port=5000)
+    init_db()
+    app.run(debug=(os.environ.get("FLASK_DEBUG", "false").lower() == "true"), host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+
+
+# Ensure the database schema exists when the module is imported (e.g. under
+# gunicorn). This makes deployments on platforms like Render or Heroku safer
+# because the tables are created at worker startup.
+try:
+    init_db()
+except Exception:
+    # Do not raise on import-time DB errors; they will surface on first request.
+    pass

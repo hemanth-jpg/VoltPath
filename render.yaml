@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: VoltPath
+    env: python
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: DATABASE_URL
+      - key: SECRET_KEY
+      - key: GOOGLE_MAPS_API_KEY
+      - key: OCM_API_KEY
