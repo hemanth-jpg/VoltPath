@@ -1,0 +1,10 @@
+venv/
+__pycache__/
+*.pyc
+.env
+instance/ev_planner.db
+.DS_Store
+*.egg-info/
+dist/
+.idea/
+.vscode/

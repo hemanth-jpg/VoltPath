@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VOLT PATH — EV Charging Route Planner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════ SIDEBAR NAV -->
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <div class="logo">
+      <div class="logo-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+        </svg>
+      </div>
+      <span class="logo-text">VOLT PATH</span>
+    </div>
+  </div>
+
+  <div class="nav-section">
+    <p class="nav-label">Navigate</p>
+    <button class="nav-item active" data-panel="planner" onclick="showPanel('planner')">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+      <span>Route Planner</span>
+    </button>
+    <button class="nav-item" data-panel="stations" onclick="showPanel('stations')">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      <span>Stations Map</span>
+    </button>
+    <button class="nav-item" data-panel="algorithms" onclick="showPanel('algorithms')">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm0-12c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4z"/></svg>
+      <span>Advanced Algorithms</span>
+    </button>
+    <button class="nav-item" data-panel="history" onclick="showPanel('history')" id="navHistory">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
+      <span>History</span>
+    </button>
+  </div>
+
+  <div class="nav-section" style="margin-top:auto">
+    <button class="nav-item" onclick="toggleTheme()">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="themeIcon"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg>
+      <span id="themeLabel">Light Mode</span>
+    </button>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════ MAIN CONTENT -->
+<main class="main-content" id="mainContent">
+
+  <!-- ─── TOP BAR ──────────────────────────────── -->
+  <header class="topbar">
+    <button class="mobile-menu-btn" id="mobileMenuBtn" aria-controls="sidebar" aria-expanded="false" aria-label="Open menu" title="Open menu">
+      Menu
+    </button>
+    <h1 class="page-title" id="pageTitle">Route Planner</h1>
+    <div class="topbar-actions">
+      <div class="status-pill" id="guestPill">
+        <span class="dot"></span> Guest Mode
+      </div>
+    </div>
+  </header>
+
+  <!-- ─── PANEL: ROUTE PLANNER ─────────────────── -->
+  <section class="panel active" id="panel-planner">
+    <div class="planner-grid">
+
+      <!-- Left: Controls -->
+      <div class="planner-controls">
+        <div class="card">
+          <h2 class="card-title">Plan Your Route</h2>
+
+          <!-- EV vehicle selectors -->
+          <div class="field-group">
+            <label>EV Brand</label>
+            <select id="carBrandSelect" class="select-input"></select>
+          </div>
+          <div class="field-group">
+            <label>EV Model</label>
+            <select id="carModelSelect" class="select-input"></select>
+          </div>
+
+          <!-- Battery Range Input -->
+          <div class="battery-bar-wrap" id="batteryWrap">
+            <div class="field-group">
+              <label>Battery Range (km)</label>
+              <input type="number" id="batteryRange" placeholder="e.g. 400" value="350" />
+            </div>
+            <div class="field-group">
+              <label>Current Charge: <strong id="chargeLabel">80%</strong></label>
+              <input type="range" id="currentCharge" min="10" max="100" value="80"
+                oninput="document.getElementById('chargeLabel').textContent = this.value + '%'" />
+            </div>
+          </div>
+
+          <div class="card ev-profile-card" id="evProfileCard">
+            <div class="card-header-row">
+              <h3 class="card-title">EV Profile</h3>
+              <span class="detail-pill">Live summary</span>
+            </div>
+            <div id="evProfileDetails" class="ev-profile-grid"></div>
+          </div>
+
+          <!-- Route Inputs -->
+          <div class="route-inputs">
+            <div class="field-group">
+              <label>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9"/></svg>
+                From
+              </label>
+              <input type="text" id="fromLocation" placeholder="Starting location..." autocomplete="off" />
+            </div>
+            <div class="route-divider">
+              <div class="route-line"></div>
+              <button class="swap-btn" onclick="swapLocations()" title="Swap">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+              </button>
+            </div>
+            <div class="field-group">
+              <label>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                To
+              </label>
+              <input type="text" id="toLocation" placeholder="Destination..." autocomplete="off" />
+            </div>
+          </div>
+
+          <div class="route-actions-row">
+            <button class="btn-ghost" type="button" onclick="useMyLocationForRoute()">📍 Use my location</button>
+            <button class="btn-primary" onclick="planRoute()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              Plan Route
+            </button>
+          </div>
+        </div>
+
+        <!-- Smart Analysis Card -->
+        <div class="card" id="analysisCard" style="display:none">
+          <h2 class="card-title">Smart Analysis</h2>
+          <div id="analysisContent"></div>
+        </div>
+
+        <!-- Charging Stations List -->
+        <div class="card" id="stationsCard" style="display:none">
+          <h2 class="card-title">Charging Stops</h2>
+          <div id="stationsList"></div>
+        </div>
+      </div>
+
+      <!-- Right: Map -->
+      <div class="map-container">
+        <div id="map" class="map-frame">
+          <div class="map-placeholder" id="mapPlaceholder">
+            <div class="map-ph-icon">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            </div>
+            <p>Enter your route to see the map</p>
+            <p class="sub">Charging stations will appear along your route</p>
+          </div>
+        </div>
+        <!-- Route Summary overlay -->
+        <div class="route-summary" id="routeSummary" style="display:none">
+          <div class="summary-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/></svg>
+            <span id="summaryDistance">—</span>
+          </div>
+          <div class="summary-sep">·</div>
+          <div class="summary-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <span id="summaryDuration">—</span>
+          </div>
+          <div class="summary-sep">·</div>
+          <div class="summary-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            <span id="summaryStops">— stops</span>
+          </div>
+          <button class="save-route-btn" onclick="saveCurrentRoute()" id="saveRouteBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── PANEL: ADVANCED ALGORITHMS ─────────── -->
+  <section class="panel" id="panel-algorithms">
+    <div class="algorithms-panel">
+      <div class="card">
+        <div class="card-header-row">
+          <div>
+            <h2 class="card-title">🚀 Advanced EV Algorithms</h2>
+            <p class="section-copy">Smart algorithms for optimal route planning, battery prediction, and charging strategy</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabs for different algorithms -->
+      <div class="algorithms-tabs">
+        <button class="algo-tab-btn active" onclick="showAlgoTab('astar')">🗺️ A* Route</button>
+        <button class="algo-tab-btn" onclick="showAlgoTab('battery')">🔋 Battery</button>
+        <button class="algo-tab-btn" onclick="showAlgoTab('stations')">⚡ Stations</button>
+        <button class="algo-tab-btn" onclick="showAlgoTab('charging')">💡 Charging</button>
+        <button class="algo-tab-btn" onclick="showAlgoTab('comprehensive')">📊 Full Analysis</button>
+      </div>
+
+      <!-- A* Route Planning -->
+      <div class="algo-tab-content active" id="algo-astar">
+        <div class="card">
+          <h3 class="card-title">A* Route Planning Algorithm</h3>
+          <p class="section-copy">Optimized path planning considering battery constraints using Haversine distance estimation</p>
+          <div class="algo-inputs">
+            <div class="field-group">
+              <label>Battery Capacity (kWh)</label>
+              <input type="number" id="astar_battery_kwh" value="60" min="10" max="200" />
+            </div>
+            <div class="field-group">
+              <label>Efficiency (kWh/km)</label>
+              <input type="number" id="astar_efficiency" value="0.2" min="0.1" max="0.5" step="0.01" />
+            </div>
+            <div class="field-group">
+              <label>Current SOC (%)</label>
+              <input type="number" id="astar_soc" value="80" min="0" max="100" />
+            </div>
+            <button class="btn-primary" onclick="runAstarAlgorithm()">📍 Analyze Route</button>
+          </div>
+          <div id="astar-result"></div>
+        </div>
+      </div>
+
+      <!-- Battery Prediction -->
+      <div class="algo-tab-content" id="algo-battery">
+        <div class="card">
+          <h3 class="card-title">Battery Range Prediction</h3>
+          <p class="section-copy">Predict real-world range considering weather, terrain, driving style, and temperature</p>
+          <div class="algo-inputs">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+              <div class="field-group">
+                <label>Base Range (km)</label>
+                <input type="number" id="battery_base_range" value="400" min="100" max="1000" />
+              </div>
+              <div class="field-group">
+                <label>Current SOC (%)</label>
+                <input type="number" id="battery_soc" value="80" min="0" max="100" />
+              </div>
+              <div class="field-group">
+                <label>Weather</label>
+                <select id="battery_weather">
+                  <option value="sunny">☀️ Sunny</option>
+                  <option value="cloudy">☁️ Cloudy</option>
+                  <option value="rainy">🌧️ Rainy</option>
+                  <option value="snowy">❄️ Snowy</option>
+                  <option value="stormy">⛈️ Stormy</option>
+                </select>
+              </div>
+              <div class="field-group">
+                <label>Terrain</label>
+                <select id="battery_terrain">
+                  <option value="flat">Flat</option>
+                  <option value="hilly">Hilly</option>
+                  <option value="mountainous">Mountainous</option>
+                  <option value="urban">Urban</option>
+                  <option value="highway">Highway</option>
+                </select>
+              </div>
+              <div class="field-group">
+                <label>Driving Style</label>
+                <select id="battery_driving">
+                  <option value="eco">🌱 Eco</option>
+                  <option value="normal">Normal</option>
+                  <option value="sport">⚡ Sport</option>
+                  <option value="aggressive">🏎️ Aggressive</option>
+                </select>
+              </div>
+              <div class="field-group">
+                <label>Temperature (°C)</label>
+                <input type="number" id="battery_temp" value="20" min="-30" max="50" />
+              </div>
+            </div>
+            <button class="btn-primary" onclick="runBatteryPrediction()">🔋 Predict Range</button>
+          </div>
+          <div id="battery-result"></div>
+        </div>
+      </div>
+
+      <!-- Station Selection -->
+      <div class="algo-tab-content" id="algo-stations">
+        <div class="card">
+          <h3 class="card-title">Smart Station Selection</h3>
+          <p class="section-copy">Intelligent selection of charging stations based on accessibility, speed, reliability, and necessity</p>
+          <div class="algo-inputs">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+              <div class="field-group">
+                <label>Current SOC (%)</label>
+                <input type="number" id="station_soc" value="30" min="0" max="100" />
+              </div>
+              <div class="field-group">
+                <label>Total Distance (km)</label>
+                <input type="number" id="station_distance" value="300" min="10" max="2000" />
+              </div>
+              <div class="field-group">
+                <label>Battery Range (km)</label>
+                <input type="number" id="station_range" value="400" min="100" max="1000" />
+              </div>
+              <div class="field-group">
+                <label>Stops Needed</label>
+                <input type="number" id="station_stops" value="1" min="1" max="10" />
+              </div>
+            </div>
+            <p class="section-copy" style="margin-top:1rem;font-size:0.85rem">Note: Uses stations from your current route. Plan a route first.</p>
+            <button class="btn-primary" onclick="runStationSelection()">⚡ Select Best Stations</button>
+          </div>
+          <div id="stations-result"></div>
+        </div>
+      </div>
+
+      <!-- Charging Recommendation -->
+      <div class="algo-tab-content" id="algo-charging">
+        <div class="card">
+          <h3 class="card-title">Weighted Charging Recommendation</h3>
+          <p class="section-copy">AI-powered strategy selection considering time, cost, efficiency, and environmental impact</p>
+          <div class="algo-inputs">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+              <div class="field-group">
+                <label>Current SOC (%)</label>
+                <input type="number" id="charging_soc" value="30" min="0" max="100" />
+              </div>
+              <div class="field-group">
+                <label>Target Distance (km)</label>
+                <input type="number" id="charging_distance" value="300" min="10" max="2000" />
+              </div>
+              <div class="field-group">
+                <label>Battery Capacity (kWh)</label>
+                <input type="number" id="charging_battery" value="60" min="10" max="200" />
+              </div>
+              <div class="field-group">
+                <label>Budget Constraint</label>
+                <select id="charging_budget">
+                  <option value="economy">💰 Economy</option>
+                  <option value="standard" selected>Standard</option>
+                  <option value="premium">⭐ Premium (Fast)</option>
+                </select>
+              </div>
+            </div>
+            <button class="btn-primary" onclick="runChargingRecommendation()">💡 Get Strategy</button>
+          </div>
+          <div id="charging-result"></div>
+        </div>
+      </div>
+
+      <!-- Comprehensive Analysis -->
+      <div class="algo-tab-content" id="algo-comprehensive">
+        <div class="card">
+          <h3 class="card-title">📊 Comprehensive Trip Analysis</h3>
+          <p class="section-copy">Combined analysis of all algorithms for complete trip optimization</p>
+          <div class="algo-inputs">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+              <div class="field-group">
+                <label>Total Distance (km)</label>
+                <input type="number" id="comp_distance" value="300" min="10" max="2000" />
+              </div>
+              <div class="field-group">
+                <label>Current SOC (%)</label>
+                <input type="number" id="comp_soc" value="80" min="0" max="100" />
+              </div>
+              <div class="field-group">
+                <label>Weather</label>
+                <select id="comp_weather">
+                  <option value="sunny">☀️ Sunny</option>
+                  <option value="rainy">🌧️ Rainy</option>
+                  <option value="snowy">❄️ Snowy</option>
+                </select>
+              </div>
+              <div class="field-group">
+                <label>Terrain</label>
+                <select id="comp_terrain">
+                  <option value="flat">Flat</option>
+                  <option value="hilly">Hilly</option>
+                  <option value="highway" selected>Highway</option>
+                </select>
+              </div>
+            </div>
+            <button class="btn-primary" onclick="runComprehensiveAnalysis()">📊 Full Analysis</button>
+          </div>
+          <div id="comprehensive-result"></div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ─── PANEL: STATIONS MAP ───────────────────── -->
+  <section class="panel" id="panel-stations">
+    <div class="stations-panel">
+      <div class="card">
+        <div class="card-header-row">
+          <div>
+            <h2 class="card-title">Charging Station Map</h2>
+            <p class="section-copy">This embedded Open Charge Map view replaces the old station search panel and keeps the charging network visible in one place.</p>
+            <p class="section-copy" style="margin-top:0.3rem;color:var(--text-muted);font-size:0.82rem;">Recent station searches are saved locally so you can still review backup results when the connection is weak.</p>
+          </div>
+          <div class="route-actions-row" style="gap:0.5rem;flex-wrap:wrap;justify-content:flex-end">
+            <input type="text" id="nearbyLocation" placeholder="Enter your area or current location" style="min-width:260px;" />
+            <select id="nearbyRadius" style="min-width:110px;">
+              <option value="5">5 km</option>
+              <option value="10" selected>10 km</option>
+              <option value="20">20 km</option>
+              <option value="30">30 km</option>
+            </select>
+            <button class="btn-ghost" type="button" onclick="findNearbyStations()">🔎 Search</button>
+            <button class="btn-ghost" type="button" onclick="useMyLocationForStations()">📍 Find my location</button>
+          </div>
+        </div>
+      </div>
+      <div class="stations-layout">
+        <div class="card station-map-shell">
+          <div class="station-map-frame" id="mapContainer">
+            <div class="map-loading-state">
+              <div class="spinner"></div>
+              <p>Loading charging map...</p>
+            </div>
+            <iframe id="chargingMapIframe" src="https://map.openchargemap.io/?mode=embedded" allow="geolocation" frameborder="0" width="100%" height="500px" title="Open Charge Map charging stations" loading="lazy" style="display:none;"></iframe>
+          </div>
+        </div>
+        <div class="card" style="flex:0 0 320px">
+          <h3 class="card-title">Nearby charging stops</h3>
+          <div id="nearbyStationsList" class="station-list"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── PANEL: HISTORY ───────────────────────── -->
+  <section class="panel" id="panel-history">
+    <div class="history-layout">
+      <div class="card" style="flex:1">
+        <div class="card-header-row">
+          <h2 class="card-title">Route History</h2>
+          <button class="btn-ghost" onclick="loadHistory()">Refresh</button>
+        </div>
+        <div id="historyList">
+          <div class="empty-state">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+            <p>Login to see your route history</p>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="flex:1">
+        <div class="card-header-row">
+          <h2 class="card-title">Favorites</h2>
+        </div>
+        <div id="favoritesList">
+          <div class="empty-state">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+            <p>No favorite routes yet</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- Toast Notification -->
+<div class="toast" id="toast"></div>
+
+<!-- Google Maps -->
+<script>
+  // Will be replaced by actual key from Flask template
+  window.GOOGLE_MAPS_KEY = "{{ google_maps_key }}";
+  window.currentRoute = null;
+  window.mapInstance = null;
+  window.directionsRenderer = null;
+  window.stationMarkers = [];
+</script>
+<script src="/static/js/app.js"></script>
+
+<!-- Load Google Maps after our script sets up the callback -->
+<script>
+  if (window.GOOGLE_MAPS_KEY && window.GOOGLE_MAPS_KEY !== '') {
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${window.GOOGLE_MAPS_KEY}&libraries=places&callback=initMap`;
+    script.async = true;
+    script.defer = true;
+    document.head.appendChild(script);
+  } else {
+    // Demo mode: load OpenStreetMap via Leaflet
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(link);
+    const script = document.createElement('script');
+    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    script.onload = () => { window.leafletReady = true; initMapLeaflet(); };
+    document.head.appendChild(script);
+  }
+</script>
+
+</body>
+</html>
