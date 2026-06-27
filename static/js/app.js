@@ -278,14 +278,17 @@ function showPanel(panelId) {
   // Hide all panels
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelectorAll('.mobile-nav-btn').forEach(n => n.classList.remove('active'));
 
   // Show selected
   const panel = document.getElementById(`panel-${panelId}`);
   if (panel) panel.classList.add('active');
 
-  // Activate nav button
-  const navBtn = document.querySelector(`[data-panel="${panelId}"]`);
+  // Activate nav buttons
+  const navBtn = document.querySelector(`.nav-item[data-panel="${panelId}"]`);
+  const mobileNavBtn = document.querySelector(`.mobile-nav-btn[data-panel="${panelId}"]`);
   if (navBtn) navBtn.classList.add('active');
+  if (mobileNavBtn) mobileNavBtn.classList.add('active');
 
   // Update page title
   const titles = {
