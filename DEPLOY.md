@@ -40,3 +40,25 @@ python app.py
 Notes
 - The app supports SQLite locally and Postgres via `DATABASE_URL` in production.
 - `Procfile` exists for platforms that respect it.
+
+   Supabase setup
+   ----------------
+   1. Create a Supabase project at https://app.supabase.com
+   2. In the project dashboard go to "Database" → "SQL Editor"
+   3. Open the file `supabase_init.sql` in this repo and paste its contents into the SQL Editor, then run it to create the tables.
+   4. In "Settings" → "Database" copy the `DATABASE_URL` connection string.
+   5. In Render, set `DATABASE_URL` to that value.
+
+   Alternatively you can run the SQL locally with `psql` if you have the database credentials.
+
+   Manual migration from app
+   -------------------------
+   If you prefer, the app will create tables automatically at startup when `DATABASE_URL` is set. To run migrations manually from your machine:
+
+   ```powershell
+   setx DATABASE_URL "<your-database-url>"
+   refreshenv # or open a new shell
+   .venv\Scripts\python.exe -c "import app; print('migration-run')"
+   ```
+
+   This will import the app which runs `init_db()` once and creates the schema.
