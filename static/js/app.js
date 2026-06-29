@@ -21,6 +21,8 @@
 const state = {
   user: null,
   currentRoute: null,
+  tripContext: null, // Stores baseline trip data for analysis
+  tripAnalysisResults: null, // Stores comprehensive analysis results
   theme: localStorage.getItem('theme') || 'dark',
   mapMode: window.GOOGLE_MAPS_KEY ? 'google' : 'leaflet',
   leafletMap: null,
@@ -182,6 +184,7 @@ function initSidebarControls() {
     sidebar.classList.remove('open');
     setExpanded(false);
     mobileBtn.classList.remove('is-active');
+    document.body.classList.remove('sidebar-open');
     removeOverlay();
   }
 
@@ -205,9 +208,11 @@ function initSidebarControls() {
     overlay.style.transition = 'opacity 0.2s ease';
     document.body.appendChild(overlay);
     overlayActive = true;
+    document.body.classList.add('sidebar-open');
     
     // Trigger fade-in
     requestAnimationFrame(() => {
+      overlay.classList.add('visible');
       overlay.style.opacity = '1';
     });
 
@@ -264,6 +269,7 @@ function initSidebarControls() {
   // Resize handler: close sidebar on desktop breakpoint
   window.addEventListener('resize', () => {
     if (window.innerWidth > 768 && sidebar.classList.contains('open')) {
+      document.body.classList.remove('sidebar-open');
       removeOverlay();
     }
   });
@@ -296,6 +302,7 @@ function showPanel(panelId) {
     stations: 'Charging Stations',
     history: 'History & Favorites',
     algorithms: 'Advanced Algorithms',
+    analysis: 'Trip Analysis Report',
   };
   document.getElementById('pageTitle').textContent = titles[panelId] || 'VoltRoute';
 
@@ -321,27 +328,30 @@ function loadChargingMapLazy() {
   
   if (!iframe || iframe.src.startsWith('blob:')) return; // Already loaded
   
-  // Show loading state
   if (loadingState) {
     loadingState.classList.remove('hidden');
   }
-  
-  // Load iframe with slight delay for smooth animation
-  setTimeout(() => {
-    if (iframe) {
-      iframe.style.display = '';
-      iframe.onload = () => {
-        // Hide loading state when iframe loads
-        if (loadingState) {
-          loadingState.classList.add('hidden');
-        }
-      };
-      // Set src to trigger loading if not already set
-      if (!iframe.src || iframe.src === '') {
-        iframe.src = 'https://map.openchargemap.io/?mode=embedded';
+
+  if (iframe) {
+    iframe.style.display = 'block';
+    iframe.style.width = '100%';
+    iframe.style.height = '100%';
+
+    const hideLoading = () => {
+      if (loadingState) {
+        loadingState.classList.add('hidden');
       }
+    };
+
+    iframe.onload = hideLoading;
+    iframe.onerror = hideLoading;
+
+    setTimeout(hideLoading, 2400);
+
+    if (!iframe.src || iframe.src === '') {
+      iframe.src = 'https://map.openchargemap.io/?mode=embedded';
     }
-  }, 100);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -933,6 +943,9 @@ async function analyzeAndDisplayRoute(distanceKm, durationMin, batteryRange, cur
   // Display smart analysis card
   displayAnalysis(planData, distanceKm, durationMin, batteryRange, currentCharge);
 
+  // Display Trip Summary Report
+  displayTripSummaryReport(from, to, distanceKm, durationMin, batteryRange, currentCharge, planData);
+
   // Run the strongest combined analysis using the live route data
   if (Array.isArray(waypoints) && waypoints.length > 1) {
     state.currentRoute = {
@@ -1097,6 +1110,293 @@ function renderRouteStations(stations, note = '') {
   `;
 
   addStationMarkersToMap(stations);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 5.5 TRIP SUMMARY & ANALYSIS REPORTS
+// ═══════════════════════════════════════════════════════════════
+
+/** Display Trip Summary Report after route planning */
+function displayTripSummaryReport(from, to, distanceKm, durationMin, batteryRange, currentCharge, planData) {
+  const tripSummaryCard = document.getElementById('tripSummaryCard');
+  const tripSummaryContent = document.getElementById('tripSummaryContent');
+  
+  // Store trip context for analysis
+  state.tripContext = {
+    from_location: from,
+    to_location: to,
+    distance_km: distanceKm,
+    duration_min: durationMin,
+    battery_range_km: batteryRange,
+    current_soc_pct: currentCharge,
+    available_range_km: (currentCharge / 100) * batteryRange,
+    stops_needed: planData.stops_needed,
+    safe_range_km: planData.safe_range_km,
+    battery_tip: planData.tip,
+    estimated_energy_kwh: Math.max(1, (distanceKm / 100) * 18)
+  };
+
+  const statusColor = planData.stops_needed === 0 ? '🟢 No Stops Needed' : 
+                     planData.stops_needed <= 1 ? '🟡 One Charging Stop' : 
+                     '🔴 Multiple Stops';
+
+  const rangeVerdict = (currentCharge / 100) * batteryRange >= distanceKm ? 
+                       'Sufficient for direct drive' : 
+                       'Charging needed';
+
+  tripSummaryContent.innerHTML = `
+    <div class="trip-summary-item">
+      <div class="trip-item-label">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/></svg>
+        From
+      </div>
+      <div class="trip-item-value">${from}</div>
+    </div>
+    <div class="trip-summary-item">
+      <div class="trip-item-label">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/></svg>
+        To
+      </div>
+      <div class="trip-item-value">${to}</div>
+    </div>
+    <div class="trip-summary-item">
+      <div class="trip-item-label">📏 Distance</div>
+      <div class="trip-item-value">${distanceKm.toFixed(1)} km</div>
+    </div>
+    <div class="trip-summary-item">
+      <div class="trip-item-label">⏱️ Duration</div>
+      <div class="trip-item-value">${formatDuration(durationMin)}</div>
+    </div>
+    <div class="trip-summary-item">
+      <div class="trip-item-label">🔋 Current Charge</div>
+      <div class="trip-item-value">${currentCharge}% (${((currentCharge / 100) * batteryRange).toFixed(0)} km)</div>
+    </div>
+    <div class="trip-summary-item">
+      <div class="trip-item-label">⚡ Vehicle Range</div>
+      <div class="trip-item-value">${batteryRange} km</div>
+    </div>
+    <div class="trip-summary-item">
+      <div class="trip-item-label">🛑 Charging Stops</div>
+      <div class="trip-item-value">${statusColor}</div>
+    </div>
+    <div class="trip-summary-item">
+      <div class="trip-item-label">✅ Feasibility</div>
+      <div class="trip-item-value">${rangeVerdict}</div>
+    </div>
+    <div class="trip-summary-item" style="grid-column: 1 / -1;">
+      <div class="trip-item-label">💡 Initial Tip</div>
+      <div class="trip-item-value" style="font-size:0.95rem">${planData.tip}</div>
+    </div>
+  `;
+
+  tripSummaryCard.style.display = 'flex';
+}
+
+/** Navigate to Advanced Algorithms with trip context pre-populated */
+function goToAdvancedAlgorithms() {
+  if (!state.tripContext) {
+    showToast('Please plan a route first.', 'error');
+    return;
+  }
+
+  // Pre-populate algorithm inputs with trip data
+  const ctx = state.tripContext;
+  document.getElementById('comp_distance').value = ctx.distance_km.toFixed(0);
+  document.getElementById('comp_soc').value = ctx.current_soc_pct;
+  
+  // Switch to algorithms panel
+  showPanel('algorithms');
+  showAlgoTab('comprehensive');
+  
+  showToast('Advanced Algorithms pre-populated with your trip data!', 'success');
+}
+
+/** Toggle viewing advanced analysis details (currently just navigates) */
+function toggleAdvancedAnalysisPanel() {
+  goToAdvancedAlgorithms();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 5.6 TRIP ANALYSIS REPORT
+// ═══════════════════════════════════════════════════════════════
+
+/** Show a specific tab in the Trip Analysis Report */
+function showReportTab(tabName) {
+  // Since only Overview tab exists now, always show it
+  const tab = document.getElementById(`report-overview`);
+  if (tab) tab.classList.add('active');
+
+  const btn = document.querySelector(`.report-tab-btn`);
+  if (btn) btn.classList.add('active');
+
+  // Populate the overview tab
+  populateReportTab('overview');
+}
+
+/** Populate report tab with data */
+function populateReportTab(tabName) {
+  const tripCtx = state.tripContext;
+
+  if (!tripCtx) {
+    showToast('No trip data available. Plan a route first.', 'error');
+    return;
+  }
+
+  // Only show Overview tab
+  const html = generateOverviewTab();
+  document.getElementById('overviewContent').innerHTML = html;
+}
+
+/** Generate Overview Tab Content */
+function generateOverviewTab() {
+  const tripCtx = state.tripContext;
+  const analysisResults = state.tripAnalysisResults;
+
+  if (!tripCtx) return '<p>No data available</p>';
+
+  const efficiency = (tripCtx.estimated_energy_kwh / tripCtx.distance_km * 100).toFixed(1);
+  const rangeUtilization = ((tripCtx.distance_km / tripCtx.battery_range_km) * 100).toFixed(1);
+
+  let html = `
+    <div class="report-metric-grid">
+      <div class="report-metric">
+        <span class="metric-label">Trip Distance</span>
+        <span class="metric-value">${tripCtx.distance_km.toFixed(1)} km</span>
+        <span class="metric-detail">Total route distance</span>
+      </div>
+      <div class="report-metric">
+        <span class="metric-label">Estimated Duration</span>
+        <span class="metric-value">${formatDuration(tripCtx.duration_min)}</span>
+        <span class="metric-detail">Travel time</span>
+      </div>
+      <div class="report-metric">
+        <span class="metric-label">Current Battery</span>
+        <span class="metric-value">${tripCtx.current_soc_pct}%</span>
+        <span class="metric-detail">${tripCtx.available_range_km.toFixed(0)} km available</span>
+      </div>
+      <div class="report-metric">
+        <span class="metric-label">Vehicle Range</span>
+        <span class="metric-value">${tripCtx.battery_range_km} km</span>
+        <span class="metric-detail">Full charge capacity</span>
+      </div>
+      <div class="report-metric">
+        <span class="metric-label">Energy Required</span>
+        <span class="metric-value">${tripCtx.estimated_energy_kwh.toFixed(1)} kWh</span>
+        <span class="metric-detail">~${efficiency}% efficiency</span>
+      </div>
+      <div class="report-metric">
+        <span class="metric-label">Range Utilization</span>
+        <span class="metric-value">${rangeUtilization}%</span>
+        <span class="metric-detail">Of vehicle capacity</span>
+      </div>
+      <div class="report-metric">
+        <span class="metric-label">Charging Stops</span>
+        <span class="metric-value">${tripCtx.stops_needed}</span>
+        <span class="metric-detail">Recommended charges</span>
+      </div>
+      <div class="report-metric">
+        <span class="metric-label">Safe Range Buffer</span>
+        <span class="metric-value">${tripCtx.safe_range_km} km</span>
+        <span class="metric-detail">Emergency reserve</span>
+      </div>
+    </div>
+    <div class="report-section" style="margin-top:2rem">
+      <h4 style="margin-bottom:1rem">Trip Assessment</h4>
+      <p class="report-text">${tripCtx.battery_tip}</p>
+    </div>
+  `;
+
+  if (analysisResults && analysisResults.smart_advice) {
+    html += `
+      <div class="report-section" style="margin-top:1.5rem">
+        <h4 style="margin-bottom:1rem">AI Recommendations</h4>
+        <p class="report-text">${analysisResults.smart_advice}</p>
+      </div>
+    `;
+  }
+
+  return html;
+}
+
+/** Generate Route Details Tab Content */
+/** Build and populate comprehensive Trip Analysis Report */
+async function buildComprehensiveTripAnalysis() {
+  if (!state.tripContext) {
+    showToast('No trip context available', 'error');
+    return;
+  }
+
+  // Generate initial report
+  showPanel('analysis');
+  showReportTab('overview');
+  showToast('Trip Analysis Report ready!', 'success');
+}
+
+/** Export report as JSON */
+function exportReportAsJSON() {
+  if (!state.tripContext) {
+    showToast('No trip data to export', 'error');
+    return;
+  }
+
+  const report = {
+    timestamp: new Date().toISOString(),
+    tripContext: state.tripContext,
+    analysisResults: state.tripAnalysisResults
+  };
+
+  const dataStr = JSON.stringify(report, null, 2);
+  const dataBlob = new Blob([dataStr], { type: 'application/json' });
+  const url = URL.createObjectURL(dataBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `trip-analysis-${Date.now()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+
+  showToast('Report exported as JSON', 'success');
+}
+
+/** Export report as CSV */
+function exportReportAsCSV() {
+  if (!state.tripContext) {
+    showToast('No trip data to export', 'error');
+    return;
+  }
+
+  const tripCtx = state.tripContext;
+  const rows = [
+    ['Trip Analysis Report', new Date().toISOString()],
+    [],
+    ['Trip Details'],
+    ['From', tripCtx.from_location],
+    ['To', tripCtx.to_location],
+    ['Distance (km)', tripCtx.distance_km.toFixed(1)],
+    ['Duration (min)', tripCtx.duration_min.toFixed(0)],
+    [],
+    ['Battery Information'],
+    ['Current SOC (%)', tripCtx.current_soc_pct],
+    ['Available Range (km)', tripCtx.available_range_km.toFixed(0)],
+    ['Vehicle Range (km)', tripCtx.battery_range_km],
+    ['Energy Required (kWh)', tripCtx.estimated_energy_kwh.toFixed(1)],
+    ['Charging Stops', tripCtx.stops_needed],
+  ];
+
+  const csv = rows.map(r => r.join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `trip-analysis-${Date.now()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+
+  showToast('Report exported as CSV', 'success');
+}
+
+/** Print the report */
+function printReport() {
+  window.print();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1710,6 +2010,7 @@ function renderGuestHistory(entries) {
 function centerStationMap(lat, lng, zoom = 10) {
   const frame = document.querySelector('.station-map-frame iframe');
   if (frame) {
+    frame.style.display = 'block';
     frame.src = `https://map.openchargemap.io/?mode=embedded&latitude=${lat.toFixed(5)}&longitude=${lng.toFixed(5)}&zoom=${zoom}`;
   }
 }
@@ -2169,6 +2470,15 @@ async function runComprehensiveAnalysisFromRoute() {
 }
 
 function displayComprehensiveResult(data) {
+  // Store results in state for Trip Analysis Report
+  state.tripAnalysisResults = {
+    astar_route_planning: data.astar_route_planning || {},
+    battery_prediction: data.battery_prediction || {},
+    top_strategy: data.top_strategy || (data.charging_recommendations && data.charging_recommendations[0]) || null,
+    smart_advice: data.smart_advice || 'Trip analysis complete',
+    charging_recommendations: data.charging_recommendations || []
+  };
+
   const resultDiv = document.getElementById('comprehensive-result');
   const astar = data.astar_route_planning || {};
   const battery = data.battery_prediction || {};
@@ -2195,6 +2505,10 @@ function displayComprehensiveResult(data) {
     <div class="algo-result-item">
       <span class="algo-result-desc">🤖 ${data.smart_advice || 'Analysis complete.'}</span>
     </div>
+    <button class="btn-primary" style="margin-top:1rem;width:100%" onclick="buildComprehensiveTripAnalysis()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/></svg>
+      View Full Trip Analysis Report
+    </button>
   `;
   
   resultDiv.innerHTML = html;

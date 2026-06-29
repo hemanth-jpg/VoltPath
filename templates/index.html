@@ -38,6 +38,10 @@
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm0-12c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4z"/></svg>
       <span>Advanced Algorithms</span>
     </button>
+    <button class="nav-item" data-panel="analysis" onclick="showPanel('analysis')">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/><path d="M9 9h6v6H9z"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+      <span>Trip Analysis</span>
+    </button>
     <button class="nav-item" data-panel="history" onclick="showPanel('history')" id="navHistory">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
       <span>History</span>
@@ -137,6 +141,28 @@
             <button class="btn-primary" onclick="planRoute()">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
               Plan Route
+            </button>
+          </div>
+        </div>
+
+        <!-- Trip Summary Report -->
+        <div class="card" id="tripSummaryCard" style="display:none">
+          <div class="card-header-row">
+            <div>
+              <h2 class="card-title">📋 Trip Summary Report</h2>
+              <p class="section-copy">Initial baseline assessment of your route</p>
+            </div>
+            <span class="detail-pill">Baseline</span>
+          </div>
+          <div id="tripSummaryContent" class="trip-summary-grid"></div>
+          <div style="margin-top:1.5rem;display:flex;gap:0.75rem">
+            <button class="btn-ghost" onclick="toggleAdvancedAnalysisPanel()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              View Details
+            </button>
+            <button class="btn-primary" onclick="goToAdvancedAlgorithms()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              Run Advanced Analysis
             </button>
           </div>
         </div>
@@ -437,6 +463,57 @@
     </div>
   </section>
 
+  <!-- ─── PANEL: TRIP ANALYSIS ───────────────────── -->
+  <section class="panel" id="panel-analysis">
+    <div class="analysis-panel">
+      <div class="card">
+        <div class="card-header-row">
+          <div>
+            <h2 class="card-title">📊 Comprehensive Trip Analysis Report</h2>
+            <p class="section-copy">Integrated analysis combining baseline trip data with advanced algorithmic insights</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Report Navigation -->
+      <div class="report-nav-tabs">
+        <button class="report-tab-btn active" onclick="showReportTab('overview')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/></svg>
+          Overview
+        </button>
+      </div>
+
+      <!-- Overview Tab -->
+      <div class="report-tab-content active" id="report-overview">
+        <div class="card">
+          <h3 class="card-title">Executive Summary</h3>
+          <div id="overviewContent" class="report-grid"></div>
+        </div>
+      </div>
+
+      <!-- Export Section -->
+      <div class="card" style="margin-top:2rem">
+        <div class="card-header-row">
+          <h3 class="card-title">Export Report</h3>
+        </div>
+        <div style="display:flex;gap:0.75rem;flex-wrap:wrap">
+          <button class="btn-ghost" onclick="exportReportAsJSON()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>
+            JSON
+          </button>
+          <button class="btn-ghost" onclick="exportReportAsCSV()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/></svg>
+            CSV
+          </button>
+          <button class="btn-ghost" onclick="printReport()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/></svg>
+            Print
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- ─── PANEL: HISTORY ───────────────────────── -->
   <section class="panel" id="panel-history">
     <div class="history-layout">
@@ -473,9 +550,9 @@
     <span>🧭</span>
     <small>Planner</small>
   </button>
-  <button class="mobile-nav-btn" type="button" data-panel="stations" onclick="showPanel('stations')">
-    <span>⚡</span>
-    <small>Stations</small>
+  <button class="mobile-nav-btn" type="button" data-panel="analysis" onclick="showPanel('analysis')">
+    <span>📊</span>
+    <small>Analysis</small>
   </button>
   <button class="mobile-nav-btn" type="button" data-panel="algorithms" onclick="showPanel('algorithms')">
     <span>🧠</span>
