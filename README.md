@@ -3,6 +3,9 @@
 A full-stack, production-ready EV Route Planner with smart charging stop recommendations, live charging station maps, user authentication, and garage management.
 
 ---
+## 🔗Website link
+##link:  https://voltpath-uru8.onrender.com/
+
 
 ## 📁 Project Structure
 
@@ -262,7 +265,7 @@ For full-stack deployment on Vercel using serverless:
 
 ## 📝 License
 
-MIT License — Free to use for learning, internships, and portfolio projects.
+Private  License - free to use  website  not a codes.
 
 ---
 
